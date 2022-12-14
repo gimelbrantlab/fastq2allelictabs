@@ -134,9 +134,9 @@ def main():
     A1_skip = int(subprocess.check_output("samtools view -SH "+args.samA1+" | wc -l", shell=True, universal_newlines=True).strip())
     A2_skip = int(subprocess.check_output("samtools view -SH "+args.samA2+" | wc -l", shell=True, universal_newlines=True).strip())
 
-    for i in range(m_skip):
+    for i in range(A1_skip):
         source_A1.readline()
-    for i in range(p_skip):
+    for i in range(A2_skip):
         source_A2.readline()
     
     # Reads processing:
@@ -181,7 +181,7 @@ def main():
   
     # Separate till some EOF: 
     try:
-        a1_read, a1_read_name, a1_score = A2gen.__next__()
+        a1_read, a1_read_name, a1_score = A1gen.__next__()
         a2_read, a2_read_name, a2_score = A2gen.__next__()
         while 1:
             if a1_read_name == a2_read_name:
@@ -194,6 +194,7 @@ def main():
                 else:
                     nondetermined_count += 1
                     output_read(out_stream_Na, a1_read)
+                    output_read(out_stream_Na, a2_read)
                 a1_read, a1_read_name, a1_score = A1gen.__next__()
                 a2_read, a2_read_name, a2_score = A2gen.__next__()
             elif asc_order(a2_read_name, a1_read_name):
@@ -210,10 +211,10 @@ def main():
     # Write the remain part of reads:
     for a1_read, a1_read_name , a1_score in A1gen:
         a1_only += 1
-        output_read(a1_read)
+        output_read(out_stream_1a, a1_read)
     for a2_read, a2_read_name , a2_score in A2gen:
         a2_only += 1
-        output_read(a2_read)
+        output_read(out_stream_2a, a2_read)
             
     
     # Closing:
@@ -229,11 +230,11 @@ def main():
     outmessage.append("----------------------------------------------------------------------------------------")
     outmessage.append("ALLELIC ASSIGNMENT SUMMARY for \n%s"%(output_name_base))
     outmessage.append("----------------------------------------------------------------------------------------")
-    outmessage.append("%d reads in Allele 1"%(a1_only))
-    outmessage.append("%d reads in Allele 2"%(a2_only))
-    outmessage.append("%d reads in Allele 1 with high probability"%(a1_count))
-    outmessage.append("%d reads in Allele 2 with high probability"%(a2_count))
-    outmessage.append("%d reads were not determined"%(nondetermined_count))
+    outmessage.append("%d reads only in alignment on Allele 1"%(a1_only))
+    outmessage.append("%d reads only in alignment on Allele 2"%(a2_only))
+    outmessage.append("%d reads better aligned to Allele 1"%(a1_count))
+    outmessage.append("%d reads better aligned to Allele 2"%(a2_count))
+    outmessage.append("%d reads were not determined by quality"%(nondetermined_count))
     outmessage.append("----- %s seconds -----" %(logtime))
     outmessage.append("%d BAD read names: "%(len(bad_reads)) + " , ".join(sorted(list(bad_reads))))
     outmessage.append("----------------------------------------------------------------------------------------")

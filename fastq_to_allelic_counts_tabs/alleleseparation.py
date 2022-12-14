@@ -29,13 +29,22 @@ import time
 import os
 start_time = time.time()
 
+AS_prefix = "AS:i:" 
+# quality, accounting for mismatches
 vA_prefix = "vA:B:c,"
 # from STAR manual: 1 or 2 match one of the genotype alleles, 3 - no match to genotype.
+vG_prefix = "vG:B:i,"
+# SNP positions (without chr, but it's well-determined by pos only)
 
-def get_name_and_variants(line):
-    vA_start_pos = line.find(vA_prefix) + len(vA_prefix)
+def get_name_score_variants(line):
+    name_pos = line.find("\t")
+    score_start_pos = line.find(AS_prefix, name_pos) + len(AS_prefix)
+    score_fin_pos = line.find("\t", score_start_pos)
+    vA_start_pos = line.find(vA_prefix, name_pos) + len(vA_prefix)
     vA_end_pos   = line.find('\t', vA_start_pos)
-    return line[:line.find('\t')], line[vA_start_pos:vA_end_pos]
+    vG_start_pos = line.find(vG_prefix, name_pos) + len(vG_prefix)
+    vG_end_pos   = line.find('\t', vG_start_pos)
+    return line[:name_pos], int(line[score_start_pos:score_fin_pos]), line[vA_start_pos:vA_end_pos], line[vG_start_pos:vG_end_pos]
 
 def parse_variants(variants):
     # rule1: % of minor allele (ref/alt) is <= 15 %
@@ -44,31 +53,75 @@ def parse_variants(variants):
     l = len(vectvars)
     c1 , c2 , c3 = [vectvars.count(x) for x in ['1','2','3']]
     if c1 == l:
-        return ("only" , 1)
+        return ("only" , 1, {"c_sum":l, "c_this":l})
     elif c2 == l:
-        return ("only" , 2)
+        return ("only" , 2, {"c_sum":l, "c_this":l})
     elif c1/l >= 0.8 and c2/l <= 0.15:
-        return ("best" , 1)
+        return ("best" , 1, {"c_sum":l, "c_this":c1})
     elif c2/l >= 0.8 and c1/l <= 0.15: 
-        return ("best" , 2)
+        return ("best" , 2, {"c_sum":l, "c_this":c2})
     else:
-        return ("none" , 0)
+        return ("none" , 0, {"c_sum":l, "c_this":0})
+
+# Dealing with samtools ordering by name:
+
+def isdigit(c):
+    return c.isdigit()
+
+def uporotiycmp(firstrb, secstrb):
+    firstr = firstrb + '\x00' 
+    secstr = secstrb + '\x00'
+    firind , secind = 0 , 0
+    firlen = len(firstr)
+    seclen = len(secstr)
+    while (firind < firlen) and (secind < seclen):
+        if (isdigit(firstr[firind]) and isdigit(secstr[secind])):
+            while (firstr[firind] == '0'):
+                firind += 1
+            while (secstr[secind] == '0'):
+                secind += 1
+            while isdigit(firstr[firind]) and isdigit(secstr[secind]) and (firstr[firind] == secstr[secind]):
+                firind += 1
+                secind += 1
+            if (isdigit(firstr[firind]) and isdigit(secstr[secind])):
+                i = 0
+                while (isdigit(firstr[firind+i]) and isdigit(secstr[secind+i])):
+                    i += 1
+                if isdigit(firstr[firind+i]): return 1
+                elif isdigit(secstr[secind+i]): return -1
+                else: return ord(firstr[firind]) - ord(secstr[secind])
+            elif (isdigit(firstr[firind])): return 1
+            elif (isdigit(secstr[secind])): return -1
+            elif (firind < secind): return 1
+            elif (firind > secind): return -1
+        else:
+            if (firstr[firind] != secstr[secind]):
+               return ord(firstr[firind]) - ord(secstr[secind])
+            firind += 1
+            secind += 1
+    if firind < firlen: return 1
+    elif secind < seclen: return -1
+    else: return 0
+
+def asc_order(name1, name2):
+    return (uporotiycmp(name1, name2) <= 0)
 
 
 
 def main():
-    # Parse arguments:
-    # --sam [path to file] --odir [output dir] --allele1 [name of the first allele] --allele2 [same for allele 2] --paired [0|1] 
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sam", required=True, help="Path to reads aligned with allelic STAR version, to allele1 genome and with provided heterozygous SNPs (vcf file with ref=allele1, alt=allele2)")
+    parser.add_argument("--samA1", required=True, help="Path to reads aligned to Allele1 pseudogenome")
+    parser.add_argument("--samA2", required=True, help="Path to reads aligned to Allele2 pseudogenome")
     parser.add_argument("--odir", required=True, help="Path to output directory")
+    parser.add_argument("--obase", required=True, help="Output base name (prefix for outputs)")
     parser.add_argument("--allele1", default="ref_allele", help="Name of the first allele (default: ref_allele)")
     parser.add_argument("--allele2", default="alt_allele", help="Name of the second allele (default: alt_allele)")
-    parser.add_argument("--paired", default=0, help="Flag: If reads are paired-end (yes : 1, no : 0)")
+    parser.add_argument("--paired", default=1, help="Flag: If reads are paired-end (yes : 1, no : 0)")
     args = parser.parse_args()
     
     paired = int(args.paired)
+
+    # Output files will be (confusing namings, yep):
 
     output_name_base = os.path.basename(args.sam)[:-4]
     sam1a = os.path.join(args.odir, ".".join([output_name_base, args.allele1, "sam"]))
@@ -78,27 +131,38 @@ def main():
     # Open output sams; Get header:
 
     header = subprocess.check_output("samtools view -SH "+args.sam, shell=True, universal_newlines=True)
+    rg_a2  = subprocess.check_output("samtools view -SH "+ args.samA2 + '| grep "^@RG"', shell=True, universal_newlines=True)
+
     out_stream_1a = open(sam1a, "w")
     out_stream_2a = open(sam2a, "w")
     out_stream_Na = open(samNa, "w")
     out_stream_1a.write(header)
     out_stream_2a.write(header)
     out_stream_Na.write(header)
+    out_stream_1a.write(rg_a2)
+    out_stream_2a.write(rg_a2)
+    out_stream_Na.write(rg_a2)
 
     # Open input_sam:        
 
-    a1_only , a1_count , a2_only , a2_count , nondetermined_count = 0 , 0 , 0 , 0 , 0
+    a1_counts = {"clearSNPs":0, "singleAllele":0, "singleAllele_clearSNPs":0, "rest":0}
+    a2_counts = {"clearSNPs":0, "singleAllele":0, "singleAllele_clearSNPs":0, "rest":0}
+    nondetermined_count = {"disc_snp":0 , "u_disc_snp_a1":0 , "u_disc_snp_a2":0 , "diff_position":0 , "disc_snp_a1_q_a2":0 , "disc_snp_a2_q_a1":0}
     bad_reads = set()
 
-    source_s = open(args.sam, 'r')
+    source_A1 = open(args.samA1, 'r')
+    source_A2 = open(args.samA2, 'r')
 
-    # Skip header in the input sam file:
-
-    s_skip = int(subprocess.check_output("samtools view -SH "+args.sam+" | wc -l", shell=True, universal_newlines=True).strip())
-
-    for i in range(s_skip-1):
-        source_s.readline()
+    # Skip header in each file:
     
+    A1_skip = int(subprocess.check_output("samtools view -SH "+args.samA1+" | wc -l", shell=True, universal_newlines=True).strip())
+    A2_skip = int(subprocess.check_output("samtools view -SH "+args.samA2+" | wc -l", shell=True, universal_newlines=True).strip())
+
+    for i in range(A1_skip):
+        source_A1.readline()
+    for i in range(A2_skip):
+        source_A2.readline()
+
     # Read process:
 
     def output_read(fhandler, a_read):
@@ -111,36 +175,74 @@ def main():
     def blocks_generator(fhandler):
         beg_line = fhandler.readline()
         output = [beg_line]
-        name, vA = get_name_and_variants(beg_line)
+        name, score, vA, vG = get_name_score_variants(beg_line)
         our_prefix = name+'\t'
         for line in fhandler:
             if line.startswith(our_prefix):
                 output.append(line)
             else:
-                yield output, name, vA
+                yield output, name, score, vA
                 beg_line = line
                 output = [beg_line]
-                name, vA = get_name_and_variants(beg_line)
+                name, score, vA, vG = get_name_score_variants(beg_line)
                 our_prefix = name+'\t'
-        yield output, name, vA
+        yield output, name, score, vA, vG
 
     def correct_blocks_generator(fhandler):
         if paired:
-            for block, name, vA in blocks_generator(fhandler):
-                if (len(block) == 2): yield block, name, vA
+            for block, name, score, vA, vG in blocks_generator(fhandler):
+                if (len(block) == 2): yield block, name, score, vA, vG
                 else: bad_reads.add(name)
         else:
-            for block, name, vA in blocks_generator(fhandler):
-                if (len(block) == 1): yield block[0], name, vA
+            for block, name, score, vA, vG in blocks_generator(fhandler):
+                if (len(block) == 1): yield block[0], name, score, vA, vG
                 else: bad_reads.add(name)
 
     # Create generator objects:
     
-    sgen = correct_blocks_generator(source_s)
-      
-    # Separate till EOF:
+    A2gen = correct_blocks_generator(source_A2)
+    A1gen = correct_blocks_generator(source_A1)
+    
+  
+    # Separate till any EOF:
     try:
-        s_read, s_readname, s_vA = sgen.__next__()
+        a1_read, a1_read_name, a1_score, a1_vA, a1_vG = A1gen.__next__()
+        a2_read, a2_read_name, a2_score, a2_vA, a2_vG = A2gen.__next__()
+
+        # aX_counts = {"clearSNPs":0, "singleAllele":0, "singleAllele_clearSNPs":0, "rest":0}
+        # nondetermined_count = {"disc_snp":0 , "u_disc_snp_a1":0 , "u_disc_snp_a2":0 , "diff_position":0 , "disc_snp_a1_q_a2":0 , "disc_snp_a2_q_a1":0}
+
+        while 1:
+            if a1_read_name == a2_read_name:
+                # i.e aligned to both alleles
+                
+
+            elif asc_order(a1_read_name, a2_read_name):
+                # i.e should look at a1_read now (aligned to A1 only)
+                if (a1_vA[1] == 1):
+                    if(a1_vA[0] == "only"):
+                        a1_counts["singleAllele_clearSNPs"] += 1
+                    else:
+                        a1_counts["singleAllele"] += 1
+                    sout = out_stream_1a
+                else:
+                    nondetermined_count["u_disc_snp_a1"] += 1
+                    sout = out_stream_Na
+                output_read(sout, a1_read)
+            else:
+                # i.e should look at a2_read now (aligned to A2 only)
+                if (a2_vA[1] == 1):
+                    if(a2_vA[0] == "only"):
+                        a2_counts["singleAllele_clearSNPs"] += 1
+                    else:
+                        a2_counts["singleAllele"] += 1
+                    sout = out_stream_1a
+                else:
+                    nondetermined_count["u_disc_snp_a2"] += 1
+                    sout = out_stream_Na
+                output_read(sout, a2_read)
+
+
         while 1:
             vA = parse_variants(s_vA)
             if vA[1] == 1:
@@ -160,13 +262,43 @@ def main():
                 sout = out_stream_Na
                 
             output_read(sout, s_read)
-            s_read, s_readname, s_vA = sgen.__next__()
+            s_read, s_readname, s_vA, s_vG = sgen.__next__()
     except StopIteration:
         pass
 
+
+    # ... and write the remain part of reads, checking vA consistence with allele:
+    for a1_read, a1_read_name , a1_score , a1_vA , a1_vG in A1gen:
+        if (a1_vA[1] == 1):
+            if(a1_vA[0] == "only"):
+                a1_counts["singleAllele_clearSNPs"] += 1
+            else:
+                a1_counts["singleAllele"] += 1
+            sout = out_stream_1a
+        else:
+            nondetermined_count["u_disc_snp_a1"] += 1
+            sout = out_stream_Na
+        output_read(sout, a1_read)
+    for a2_read, a2_read_name , a2_score , a2_vA , a2_vG in A2gen:
+        if (a2_vA[1] == 2):
+            if(a2_vA[0] == "only"):
+                a2_counts["singleAllele_clearSNPs"] += 1
+            else:
+                a2_counts["singleAllele"] += 1
+            sout = out_stream_2a
+        else:
+            nondetermined_count["u_disc_snp_a2"] += 1
+            sout = out_stream_Na
+        output_read(sout, a2_read)
+
+
+
+
+
     # Closing:
 
-    out_stream_Na.close(); out_stream_1a.close(); out_stream_2a.close(); source_s.close()
+    out_stream_Na.close(); out_stream_1a.close(); out_stream_2a.close()
+    source_A1.close(); source_A2.close()
 
     logfile = os.path.join(args.odir, ".".join([output_name_base,"log_allelic_assignment", "txt"]))
     logtime = time.time() - start_time
@@ -175,11 +307,11 @@ def main():
     outmessage.append("----------------------------------------------------------------------------------------")
     outmessage.append("ALLELIC ASSIGNMENT SUMMARY for \n%s"%(output_name_base))
     outmessage.append("----------------------------------------------------------------------------------------")
-    outmessage.append("%d reads in Allele 1"%(a1_only))
-    outmessage.append("%d reads in Allele 2"%(a2_only))
-    outmessage.append("%d reads in Allele 1 with high probability"%(a1_count))
-    outmessage.append("%d reads in Allele 2 with high probability"%(a2_count))
-    outmessage.append("%d reads were not determined"%(nondetermined_count))
+    outmessage.append("%d reads only in Allele 1"%(a1_only))
+    outmessage.append("%d reads only in Allele 2"%(a2_only))
+    outmessage.append("%d reads better aligned to Allele 1"%(a1_count))
+    outmessage.append("%d reads better aligned to Allele 2"%(a2_count))
+    outmessage.append("%d reads were not determined by quality"%(nondetermined_count))
     outmessage.append("----- %s seconds -----" %(logtime))
     outmessage.append("%d BAD read names: "%(len(bad_reads)) + " , ".join(sorted(list(bad_reads))))
     outmessage.append("----------------------------------------------------------------------------------------")

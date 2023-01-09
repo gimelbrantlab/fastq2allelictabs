@@ -31,7 +31,7 @@ fastq1Path=${infoVect[10]}
 fastq2Path=${infoVect[11]}
 d=${infoVect[12]}
 
-refDirs=( "0to1shifter" $refDir1 $refDir2 ) 
+refDirs=( 0 $refDir1 $refDir2 ) 
 
 # -----------
 # Processing:
@@ -64,9 +64,9 @@ for A in 1 2; do
       #--quantMode GeneCounts
 
   # Allelic reads filtering: 
-  samtools view -H $albam  > $fsam
-  samtools view $albam | grep "vW:i:1" >> $fsam
-  samtools sort -n -o $fsamNSort $fsam
+  samtools view --no-PG -H $albam  > $fsam
+  samtools view --no-PG $albam | grep "vW:i:1" >> $fsam
+  samtools sort --no-PG -n -o $fsamNSort $fsam
   rm $fsam
 done
 
@@ -84,7 +84,7 @@ python3 $d_f2t/fastq_to_allelic_counts_tabs/alleleseparation.py \
 
 for sam in $(ls $alD/*.sam); do
   bam=${sam::-3}bam
-  samtools view -o $bam $sam
+  samtools view --no-PG -o $bam $sam
 done
 
 rm $alD/*.sam
@@ -107,6 +107,6 @@ chr_counts=$sampleID"_"$chimericName".chr_counts"
 bams_to_chr_count=( $albam1 $albam2 $fbamRef $fbamAlt )
 suffs=(".aligned_on_Allele1.tsv" ".aligned_on_Allele2.tsv" ".Allele1.tsv" ".Allele2.tsv")
 for ib in {0..3}; do
-    samtools view ${bams_to_chr_count[$ib]} | cut -f3 | sort -V | uniq -c | sed -e 's/^ *//' -e 's/ /\t/' > $alD/$chr_counts${suffs[$ib]}
+    samtools view --no-PG ${bams_to_chr_count[$ib]} | cut -f3 | sort -V | uniq -c | sed -e 's/^ *//' -e 's/ /\t/' > $alD/$chr_counts${suffs[$ib]}
 done
 

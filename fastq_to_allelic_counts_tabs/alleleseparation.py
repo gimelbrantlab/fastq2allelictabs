@@ -46,12 +46,29 @@ def get_name_score_variants(line):
     vG_end_pos   = line.find('\t', vG_start_pos)
     return line[:name_pos], int(line[score_start_pos:score_fin_pos]), line[vA_start_pos:vA_end_pos], line[vG_start_pos:vG_end_pos]
 
-def parse_variants(variants):
+def parse_variants(variants, positions):
     # rule1: % of minor allele (ref/alt) is <= 15 %
     # rule2: % of major allele (ref/alt) is >= 80 %
     vectvars = variants.strip().split(",")
-    l = len(vectvars)
-    c1 , c2 , c3 = [vectvars.count(x) for x in ['1','2','3']]
+    vectpos  = positions.strip().split(",")
+    ### is reads intersect and len(fragm)<2*len(read),
+    ### then it might have same snp counted twice,
+    ### we want to take unique encountersm and remove reads
+    ### having mismatching calls at snps:
+
+    dictvars = dict()
+    clean = True
+    for i, pos in enumerate(vectpos):
+        if (pos in dictvars) and (dictvars[pos] != vectvars[i]):
+            clean = False
+        else:
+            dictvars[pos] = vectvars[i]
+
+    l = len(dictvars)
+    if not clean:
+        return ("disc", 0,  {"c_sum":l, "c_this":0})
+
+    c1 , c2 , c3 = [list(dictvars.values()).count(x) for x in ['1','2','3']]
     if c1 == l:
         return ("only" , 1, {"c_sum":l, "c_this":l})
     elif c2 == l:
@@ -130,8 +147,8 @@ def main():
 
     # Open output sams; Get header:
 
-    header = subprocess.check_output("samtools view -SH "+args.samA1, shell=True, universal_newlines=True)
-    rg_a2  = subprocess.check_output("samtools view -SH "+ args.samA2 + '| grep "^@RG"', shell=True, universal_newlines=True)
+    header = subprocess.check_output("samtools view -SH --no-PG " + args.samA1, shell=True, universal_newlines=True)
+    rg_a2  = subprocess.check_output("samtools view -SH --no-PG " + args.samA2 + '| grep "^@RG"', shell=True, universal_newlines=True)
 
     out_stream_1a = open(sam1a, "w")
     out_stream_2a = open(sam2a, "w")
@@ -147,7 +164,7 @@ def main():
 
     a1_counts = {"clearSNPs":0, "singleAllele":0, "singleAllele_clearSNPs":0, "rest":0}
     a2_counts = {"clearSNPs":0, "singleAllele":0, "singleAllele_clearSNPs":0, "rest":0}
-    nondetermined_count = {"disc_snp":0 , "u_disc_snp_a1":0 , "u_disc_snp_a2":0 , "diff_position":0 , "disc_snp_a1_q_a2":0 , "disc_snp_a2_q_a1":0}
+    nondetermined_count = {"disc_mates":0 , "disc_snp":0 , "u_disc_snp_a1":0 , "u_disc_snp_a2":0 , "diff_position":0 , "disc_snp_a1_q_a2":0 , "disc_snp_a2_q_a1":0}
     bad_reads = set()
 
     err_2_disc_classes = ["disc_snp", "disc_snp_a1_q_a2", "disc_snp_a2_q_a1"]
@@ -157,8 +174,8 @@ def main():
 
     # Skip header in each file:
     
-    A1_skip = int(subprocess.check_output("samtools view -SH "+args.samA1+" | wc -l", shell=True, universal_newlines=True).strip())
-    A2_skip = int(subprocess.check_output("samtools view -SH "+args.samA2+" | wc -l", shell=True, universal_newlines=True).strip())
+    A1_skip = int(subprocess.check_output("samtools view -SH --no-PG "+args.samA1+" | wc -l", shell=True, universal_newlines=True).strip())
+    A2_skip = int(subprocess.check_output("samtools view -SH --no-PG "+args.samA2+" | wc -l", shell=True, universal_newlines=True).strip())
 
     for i in range(A1_skip):
         source_A1.readline()
@@ -219,8 +236,8 @@ def main():
                     output_read(out_stream_Na, a1_read)
                     output_read(out_stream_Na, a2_read)
                 else:
-                    vA1 = parse_variants(a1_vA)
-                    vA2 = parse_variants(a2_vA)
+                    vA1 = parse_variants(a1_vA, a1_vG)
+                    vA2 = parse_variants(a2_vA, a2_vG)
                     # can this read be assigned to some allele looking at SNPs?
                     # is the best candidate when looking at SNPs has better quality too?
                     if (vA1[1] == 1 and (a1_score > a2_score or a1_score < a2_score and vA1[2]["c_this"] >= 3)):
@@ -235,6 +252,10 @@ def main():
                         else:
                             a2_counts["rest"] += 1
                         output_read(out_stream_2a, a2_read)
+                    elif (vA1[0] == "disc"):
+                        nondetermined_count["disc_mates"] += 1
+                        output_read(out_stream_Na, a1_read)
+                        output_read(out_stream_Na, a2_read)
                     else:
                         nondetermined_count[err_2_disc_classes[vA1[1]]] += 1
                         output_read(out_stream_Na, a1_read)
@@ -243,13 +264,16 @@ def main():
                 a2_read, a2_read_name, a2_score, a2_vA, a2_vG = A2gen.__next__()            
             elif asc_order(a1_read_name, a2_read_name):
                 # i.e should look at a1_read now (aligned to A1 only)
-                vA = parse_variants(a1_vA)
+                vA = parse_variants(a1_vA, a1_vG)
                 if (vA[1] == 1):
                     if(vA[0] == "only"):
                         a1_counts["singleAllele_clearSNPs"] += 1
                     else:
                         a1_counts["singleAllele"] += 1
                     sout = out_stream_1a
+                elif (vA[0] == "disc"):
+                    nondetermined_count["disc_mates"] += 1
+                    sout = out_stream_Na
                 else:
                     nondetermined_count["u_disc_snp_a1"] += 1
                     sout = out_stream_Na
@@ -257,13 +281,16 @@ def main():
                 a1_read, a1_read_name , a1_score , a1_vA , a1_vG = A1gen.__next__()
             else:
                 # i.e should look at a2_read now (aligned to A2 only)
-                vA = parse_variants(a2_vA)
+                vA = parse_variants(a2_vA, a2_vG)
                 if (vA[1] == 2):
                     if(vA[0] == "only"):
                         a2_counts["singleAllele_clearSNPs"] += 1
                     else:
                         a2_counts["singleAllele"] += 1
                     sout = out_stream_2a
+                elif (vA[0] == "disc"):
+                    nondetermined_count["disc_mates"] += 1
+                    sout = out_stream_Na
                 else:
                     nondetermined_count["u_disc_snp_a2"] += 1
                     sout = out_stream_Na
@@ -274,25 +301,31 @@ def main():
 
     # ... and write the remain part of reads, checking vA consistence with allele:
     for a1_read, a1_read_name , a1_score , a1_vA , a1_vG in A1gen:
-        vA = parse_variants(a1_vA)
+        vA = parse_variants(a1_vA, a1_vG)
         if (vA[1] == 1):
             if(vA[0] == "only"):
                 a1_counts["singleAllele_clearSNPs"] += 1
             else:
                 a1_counts["singleAllele"] += 1
             sout = out_stream_1a
+        elif (vA[0] == "disc"):
+            nondetermined_count["disc_mates"] += 1
+            sout = out_stream_Na
         else:
             nondetermined_count["u_disc_snp_a1"] += 1
             sout = out_stream_Na
         output_read(sout, a1_read)
     for a2_read, a2_read_name , a2_score , a2_vA , a2_vG in A2gen:
-        vA = parse_variants(a2_vA)
+        vA = parse_variants(a2_vA, a2_vG)
         if (vA[1] == 2):
             if(vA[0] == "only"):
                 a2_counts["singleAllele_clearSNPs"] += 1
             else:
                 a2_counts["singleAllele"] += 1
             sout = out_stream_2a
+        elif (vA[0] == "disc"):
+            nondetermined_count["disc_mates"] += 1
+            sout = out_stream_Na
         else:
             nondetermined_count["u_disc_snp_a2"] += 1
             sout = out_stream_Na
@@ -306,10 +339,6 @@ def main():
 
     logfile = os.path.join(args.odir, ".".join([output_name_base,"log_allelic_assignment", "txt"]))
     logtime = time.time() - start_time
-
-        # aX_counts = {"clearSNPs":0, "singleAllele":0, "singleAllele_clearSNPs":0, "rest":0}
-        # nondetermined_count = {"disc_snp":0 , "u_disc_snp_a1":0 , "u_disc_snp_a2":0 , 
-        #                        "diff_position":0 , "disc_snp_a1_q_a2":0 , "disc_snp_a2_q_a1":0} 
 
     outmessage = []
     outmessage.append("----------------------------------------------------------------------------------------")
@@ -333,7 +362,8 @@ def main():
     outmessage.append("    %d - SNPs vote for A2, quality votes for A1"%(nondetermined_count["disc_snp_a2_q_a1"]))
     outmessage.append("    %d - was aligned only to A1, but SNPs come from A2"%(nondetermined_count["u_disc_snp_a1"]))
     outmessage.append("    %d - was aligned only to A2, but SNPs come from A1"%(nondetermined_count["u_disc_snp_a2"]))
-    outmessage.append("    %d - discordant SNP calls"%(nondetermined_count["disc_snp"]))
+    outmessage.append("    %d - discordant SNP calls within fragment"%(nondetermined_count["disc_snp"]))
+    outmessage.append("    %d - discordant SNP calls on mate reads"%(nondetermined_count["disc_mates"]))
     outmessage.append("----- %s seconds -----" %(logtime))
     outmessage.append("%d BAD read names: "%(len(bad_reads)) + " , ".join(sorted(list(bad_reads))))
     outmessage.append("----------------------------------------------------------------------------------------\n")

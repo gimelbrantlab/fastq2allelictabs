@@ -2,7 +2,7 @@
 #                                                       #
 #                 ASE Spike-In Project                  #
 #                                                       #
-#               Author: Mendelevich Asia		#
+#      Authors: Mendelevich Asia, Pakharev Aleksei	#
 #                                                       #
 #           Earlier versions: ASEReadcounter*           #
 #               with Svetlana Vinogradova               #
@@ -16,7 +16,7 @@
 ## 3. AS field must be present in SAM files (to filter by alignment quality) - typical for STAR
 ## 4. vA field must be present in SAM files (to filter by heterozygous SNPs) - the respective flag should be used in STAR
 ## 
-## USAGE:  python3 alleleseparation.py --samA1 [path to alignment on A1] --samA2 [path to alignment on A2] --odir [output dir] --allele1 [name of the first allele] --allele2 [same for allele 2] --paired [0|1] 
+## USAGE:  python3 alleleseparation.py --samA1 [path to alignment on A1] --samA2 [path to alignment on A2] --obase [meaningful part of the name, used in outputs] --odir [output dir] --allele1 [name of the first allele] --allele2 [same for allele 2] --paired [0|1] 
 ##
 
 #import cProfile
@@ -229,7 +229,7 @@ def main():
                         else:
                             a1_counts["rest"] += 1
                         output_read(out_stream_1a, a1_read)
-                    elif (vA1[1] == 2 and (a1_score < a2_score or a1_score < a2_score and vA2[2]["c_this"] >= 3)):
+                    elif (vA2[1] == 2 and (a1_score < a2_score or a1_score > a2_score and vA2[2]["c_this"] >= 3)):
                         if (vA2[0] == "only"):
                             a2_counts["clearSNPs"] += 1
                         else:
@@ -258,12 +258,12 @@ def main():
             else:
                 # i.e should look at a2_read now (aligned to A2 only)
                 vA = parse_variants(a2_vA)
-                if (vA[1] == 1):
+                if (vA[1] == 2):
                     if(vA[0] == "only"):
                         a2_counts["singleAllele_clearSNPs"] += 1
                     else:
                         a2_counts["singleAllele"] += 1
-                    sout = out_stream_1a
+                    sout = out_stream_2a
                 else:
                     nondetermined_count["u_disc_snp_a2"] += 1
                     sout = out_stream_Na
@@ -328,15 +328,15 @@ def main():
     outmessage.append("    %d - all SNPs"%(a2_counts["clearSNPs"]))
     outmessage.append("    %d - dominating number of SNPs"%(a2_counts["rest"]))
     outmessage.append("%d reads were not determined"%(sum(nondetermined_count.values())))
-    outmessage.append("    %d - discordant SNP calls"%(nondetermined_count["disc_snp"]))
     outmessage.append("    %d - unmatching alignment positioning between alleles"%(nondetermined_count["diff_position"]))
     outmessage.append("    %d - SNPs vote for A1, quality votes for A2"%(nondetermined_count["disc_snp_a1_q_a2"]))
     outmessage.append("    %d - SNPs vote for A2, quality votes for A1"%(nondetermined_count["disc_snp_a2_q_a1"]))
-    outmessage.append("    %d - was aligned to A1, but SNPs come from A2"%(nondetermined_count["u_disc_snp_a1"]))
-    outmessage.append("    %d - was aligned to A2, but SNPs come from A1"%(nondetermined_count["u_disc_snp_a2"]))
+    outmessage.append("    %d - was aligned only to A1, but SNPs come from A2"%(nondetermined_count["u_disc_snp_a1"]))
+    outmessage.append("    %d - was aligned only to A2, but SNPs come from A1"%(nondetermined_count["u_disc_snp_a2"]))
+    outmessage.append("    %d - discordant SNP calls"%(nondetermined_count["disc_snp"]))
     outmessage.append("----- %s seconds -----" %(logtime))
     outmessage.append("%d BAD read names: "%(len(bad_reads)) + " , ".join(sorted(list(bad_reads))))
-    outmessage.append("----------------------------------------------------------------------------------------")
+    outmessage.append("----------------------------------------------------------------------------------------\n")
     print("\n".join(outmessage))
 
     with open (logfile, "w") as f:

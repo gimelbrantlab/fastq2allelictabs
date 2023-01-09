@@ -17,57 +17,80 @@ for i in ${indices[*]}; do
 
 infoVect=(`grep -w "^"$i $infoTab`)
 
-# 13 mandatory fields (0-12), so:
+# 15 mandatory fields (0-14), so:
 sampleID=${infoVect[1]}
 refSample=${infoVect[4]}
 refSpikeIn=${infoVect[5]}
-refDir=${infoVect[9]}
+chimericName=${infoVect[7]}
+refDir1=${infoVect[8]}
+refDir2=${infoVect[9]}
 fastq1Path=${infoVect[10]}
 fastq2Path=${infoVect[11]}
 d=${infoVect[12]}
-suffChrSample=${infoVect[29]}
-suffChrSpikein=${infoVect[30]}
+suffChrSample=${infoVect[13]}
+suffChrSpikein=${infoVect[14]}
  
 vcf=$(ls $refDir/*vcf)
 alD=$d/alignments/$sampleID/
-alprefix=$alD/$sampleID".on_"$refSample"_"$refSpikeIn"."
-albam=$alprefix"Aligned.sortedByCoord.out.bam"
-alsam=${albam::-3}"sam"
-fsam=${alsam::-3}"filtered_vW1.sam"
-fsamNSort=${fsam::-3}"Nsort.sam"
-fbamRef=${fsam::-3}"Nsort.ref_allele.bam"
-fbamAlt=${fsam::-3}"Nsort.alt_allele.bam"
-
-# -------------
-# Info filling:
-
-star_log=$alprefix"Log.final.out"
-assign_log=$alprefix"Aligned.sortedByCoord.out.filtered_vW1.Nsort.log_allelic_assignment.txt"
-chr_counts=$alprefix"chr_counts"
-
-nFastq=$(grep "Number of input reads" $star_log | cut -f 2)
-nAlign=$(grep "Uniquely mapped reads number" $star_log | cut -f 2)
-pUMap=$(grep "Uniquely mapped reads %" $star_log | cut -f 2)
-pMany=$(grep "% of reads mapped to too many loci" $star_log | cut -f 2)
-pMiss=$(grep "% of reads unmapped: too many mismatches" $star_log | cut -f 2)
-pShort=$(grep "% of reads unmapped: too short" $star_log | cut -f 2)
-pOther=$(grep "% of reads unmapped: other" $star_log | cut -f 2)
-
-assign_vect=($(head -9 $assign_log | tail -5 | cut -f1 -d " "))
-nA1=${assign_vect[0]}
-nA2=${assign_vect[1]}
-nA1prob=${assign_vect[2]}
-nA2prob=${assign_vect[3]}
-nNoA=${assign_vect[4]}
 
 
-chrcAling=$chr_counts".aligned.tsv"
-chrcRef=$chr_counts".ref_allele.tsv"
-chrcAlt=$chr_counts".alt_allele.tsv"
+# -- computing stats for alignments on A1 and A2 --
+# --
+# -- files --
 
-v29=$chr_counts".aligned_ref_alt.tsv"
+alprefix=$alD/$sampleID".on_"$chimericName
+sampleprefix=$alD/$sampleID"_"$chimericName
 
-script="df=Reduce(function(x,y) merge(x,y, by=\"V2\", all=T), list(data.frame(read.delim(\""$chrcAling"\", header=F)), data.frame(read.delim(\""$chrcRef"\", header=F)), data.frame(read.delim(\""$chrcAlt"\", header=F)))); write.table(df, file=\""$v29"\", sep=\"\t\", row.names=FALSE, col.names=F, quote=FALSE)"
+bamAlignAR1=$alprefix".on_Allele1.Aligned.sortedByCoord.out.bam"
+#fbamAR1=$alprefix".on_Allele1.Aligned.sortedByCoord.out.filtered_vW1.Nsort.bam"
+bamAlignAR2=$alprefix".on_Allele2.Aligned.sortedByCoord.out.bam"
+#fbamAR2=$alprefix".on_Allele2.Aligned.sortedByCoord.out.filtered_vW1.Nsort.bam"
+
+bamA1=$sampleprefix".Allele1.bam"
+bamA2=$sampleprefix".Allele2.bam"
+
+star_log_AR1=$alprefix".on_Allele1.Log.final.out"
+star_log_AR2=$alprefix".on_Allele2.Log.final.out"
+
+assign_log=$sampleprefix".log_allelic_assignment.txt"
+
+chr_counts=$sampleprefix".chr_counts"
+chrcAlign1=$chr_counts".aligned_on_Allele1.tsv"
+chrcAlign2=$chr_counts".aligned_on_Allele2.tsv"
+chrcRef=$chr_counts".Allele1.tsv"
+chrcAlt=$chr_counts".Allele2.tsv"
+
+# -- taking out all stats --
+# -- STAR log -- 
+
+nFastq=$(grep "Number of input reads" $star_log_AR1 | cut -f 2)
+
+nAlignAR1=$(grep "Uniquely mapped reads number" $star_log_AR1 | cut -f 2)
+pUMapAR1=$(grep "Uniquely mapped reads %" $star_log_AR1 | cut -f 2)
+pManyAR1=$(grep "% of reads mapped to too many loci" $star_log_AR1 | cut -f 2)
+pMissAR1=$(grep "% of reads unmapped: too many mismatches" $star_log_AR1 | cut -f 2)
+pShortAR1=$(grep "% of reads unmapped: too short" $star_log_AR1 | cut -f 2)
+pOtherAR1=$(grep "% of reads unmapped: other" $star_log_AR1 | cut -f 2)
+
+nAlignAR2=$(grep "Uniquely mapped reads number" $star_log_AR2 | cut -f 2)
+pUMapAR2=$(grep "Uniquely mapped reads %" $star_log_AR2 | cut -f 2)
+pManyAR2=$(grep "% of reads mapped to too many loci" $star_log_AR2 | cut -f 2)
+pMissAR2=$(grep "% of reads unmapped: too many mismatches" $star_log_AR2 | cut -f 2)
+pShortAR2=$(grep "% of reads unmapped: too short" $star_log_AR2 | cut -f 2)
+pOtherAR2=$(grep "% of reads unmapped: other" $star_log_AR2 | cut -f 2)
+
+
+# -- merge log --
+asums=(`tail -n +5 $assign_log | head -n 15 | cut -f1 -d " "`)
+nA1=$(( ${asums[0]} + ${asums[2]} ))
+nA2=$(( ${asums[1]} + ${asums[3]} ))
+nNoA=${asums[4]}
+
+# -- chromosome counting --
+
+tabNChrom=$chr_counts".aligned_ref_alt.tsv"
+
+script="df=Reduce(function(x,y) merge(x,y, by=\"V2\", all=T), list(data.frame(read.delim(\""$chrcAlign1"\", header=F)), data.frame(read.delim(\""$chrcAlign2"\", header=F)), data.frame(read.delim(\""$chrcRef"\", header=F)), data.frame(read.delim(\""$chrcAlt"\", header=F)))); write.table(df, file=\""$tabNChrom"\", sep=\"\t\", row.names=FALSE, col.names=F, quote=FALSE)"
 R -e "$script"
 
 function chromosomal_counter {
@@ -75,35 +98,37 @@ function chromosomal_counter {
     [[ ! -z "$precount" ]] && echo $(($precount / 2)) || echo 0
 }
 
-v32=`chromosomal_counter $suffChrSample $chrcAling`
-v33=`chromosomal_counter $suffChrSpikein $chrcAling`
-v34=`chromosomal_counter $suffChrSample $chrcRef`
-v35=`chromosomal_counter $suffChrSample $chrcAlt`
-v36=`chromosomal_counter $suffChrSpikein $chrcRef`
-v37=`chromosomal_counter $suffChrSpikein $chrcAlt`
+nAlignAR1Sample=`chromosomal_counter $suffChrSample $chrcAlignA1`
+nAlignAR1Spikein=`chromosomal_counter $suffChrSpikein $chrcAlig`
+nAlignAR2Sample=`chromosomal_counter $suffChrSample $chrcAlignA2`
+nAlignAR2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlignA2`
+nA1Sample=`chromosomal_counter $suffChrSample $chrcRef`
+nA2Sample=`chromosomal_counter $suffChrSample $chrcAlt`
+nA1Spikein=`chromosomal_counter $suffChrSpikein $chrcRef`
+nA2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlt`
 
-#v32=$(($(grep $suffChrSample"$" $chrcAling | cut -f1 | paste -sd+ | bc) / 2))
-#v33=$(($(grep $suffChrSpikein"$" $chrcAling | cut -f1 | paste -sd+ | bc) / 2))
-#v34=$(($(grep $suffChrSample"$" $chrcRef | cut -f1 | paste -sd+ | bc) / 2))
-#v35=$(($(grep $suffChrSample"$" $chrcAlt | cut -f1 | paste -sd+ | bc) / 2))
-#v36=$(($(grep $suffChrSpikein"$" $chrcRef | cut -f1 | paste -sd+ | bc) / 2))
-#v37=$(($(grep $suffChrSpikein"$" $chrcAlt | cut -f1 | paste -sd+ | bc) / 2))
-
-# columns 14-28, 29 and 32-37 
+# -- filling columns 16-44 --
 
 awk -v id=$sampleID -v d=$d \
-    -v v14=$nFastq -v v15=$nAlign -v v16=$pUMap \
-    -v v17=$pMany   -v v18=$pMiss  -v v19=$pShort -v v20=$pOther \
-    -v v21=$albam \
-    -v v22=$nA1    -v v23=$nA2    -v v24=$nA1prob -v v25=$nA2prob -v v26=$nNoA \
-    -v v27=$fbamRef -v v28=$fbamAlt \
-    -v v29=$v29 \
-    -v v32=$v32 -v v33=$v33 -v v34=$v34 -v v35=$v35 -v v36=$v36 -v v37=$v37 \
+    -v v16=$bamAlignAR1 -v v17=$bamAlignAR2 \
+    -v v18=$bamA1 -v v19=$bamA2 \
+    -v v20=$tabNChrom \
+    -v v21=$nFastq \
+    -v v22=$nAlignAR1 -v v23=$nAlignAR1Sample -v v24=$nAlignAR1Spikein \
+    -v v25=$pUMapAR1  -v v26=$pManyAR1        -v v27=$pMissAR1         \
+    -v v28=$pShortAR1 -v v29=$pOtherAR1                                \
+    -v v30=$nAlignAR2 -v v31=$nAlignAR2Sample -v v32=$nAlignAR2Spikein \
+    -v v33=$pUMapAR2  -v v34=$pManyAR2        -v v35=$pMissAR2         \
+    -v v36=$pShortAR2 -v v37=$pOtherAR2                                \
+    -v v38=$nA1       -v v39=$nA2             -v v40=$nNoA             \
+    -v v41=$nA1Sample -v v42=$nA2Sample -v v43=$nA1Spikein -v v44=$nA2Spikein \
     -v OFS='\t' '{
         if ($2==id && $13==d) {
-            $14=v14; $15=v15; $16=v16; $17=v17; $18=v18; $19=v19; $20=v20; $21=v21;
+            $16=v16; $17=v17; $18=v18; $19=v19; $20=v20; $21=v21;
             $22=v22; $23=v23; $24=v24; $25=v25; $26=v26; $27=v27; $28=v28;
-            $29=v29; $32=v32; $33=v33; $34=v34; $35=v35; $36=v36; $37=v37
+            $29=v29; $30=v30; $31=v31; $32=v32; $33=v33; $34=v34; $35=v35; 
+            $36=v36; $37=v37; $38=v38; $39=v39; $40=v40; $41=v41; $42=v42;
+            $43=v43; $44=v44 
         }; print $0}' $infoTab > $d/tmp$id; \
     mv $d/tmp$id $infoTab 
 

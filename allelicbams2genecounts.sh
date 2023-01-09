@@ -9,7 +9,6 @@ module load gcc samtools
 # Info Table:
 infoTab=$1
 
-
 infoName=$(basename $infoTab)
 outName=${infoName::-9}
 
@@ -24,9 +23,11 @@ while read line; do
     odir=$ddir/featurecounts
     mkdir $odir
     otxt=$odir/$outName"."$org_sample"_"$org_spikein".counts.tsv"
-    bams=($( awk -v os1=$org_sample -v os2=$org_spikein -v d=$ddir -v OFS='\t' '{if ($5==os1 && $6==os2 && $13==d) {print $27, $28}}' $infoTab ))
+    bams=($( awk -v os1=$org_sample -v os2=$org_spikein -v d=$ddir -v OFS='\t' '{if ($5==os1 && $6==os2 && $13==d) {print $18, $19}}' $infoTab ))
     echo ${bams[*]}
     refdirs=($( awk -v os1=$org_sample -v os2=$org_spikein -v d=$ddir -v OFS='\t' '{if ($5==os1 && $6==os2 && $13==d) {print $10}}' $infoTab ))
+
+    echo /home/amendelevich/tools/subread-2.0.2-Linux-x86_64/bin/featureCounts -p -a $(ls ${refdirs[0]}/*gtf) -o $otxt ${bams[*]} --countReadPairs -B -C
 
     /home/amendelevich/tools/subread-2.0.2-Linux-x86_64/bin/featureCounts -p -a $(ls ${refdirs[0]}/*gtf) -o $otxt ${bams[*]} --countReadPairs -B -C
 

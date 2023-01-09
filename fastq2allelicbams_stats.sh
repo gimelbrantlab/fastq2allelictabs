@@ -4,8 +4,6 @@
 #SBATCH -o /home/amendelevich/logs/bulkSpike/Sep22/fastq2albam_%A_%a.out
 #SBATCH -e /home/amendelevich/logs/bulkSpike/Sep22/fastq2albam_%A_%a.err
 
-module load gcc/5.3.0 
-module load samtools/1.12 bcftools/1.7 htslib/1.7 python/3.6.10
 module load R/3.6.1
 
 # Table to fill:

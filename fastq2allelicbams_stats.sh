@@ -28,7 +28,7 @@ d=${infoVect[12]}
 suffChrSample=${infoVect[13]}
 suffChrSpikein=${infoVect[14]}
  
-vcf=$(ls $refDir/*vcf)
+vcf=$(ls $refDir1/*vcf)
 alD=$d/alignments/$sampleID/
 
 
@@ -96,10 +96,10 @@ function chromosomal_counter {
     [[ ! -z "$precount" ]] && echo $(($precount / 2)) || echo 0
 }
 
-nAlignAR1Sample=`chromosomal_counter $suffChrSample $chrcAlignA1`
-nAlignAR1Spikein=`chromosomal_counter $suffChrSpikein $chrcAlig`
-nAlignAR2Sample=`chromosomal_counter $suffChrSample $chrcAlignA2`
-nAlignAR2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlignA2`
+nAlignAR1Sample=`chromosomal_counter $suffChrSample $chrcAlign1`
+nAlignAR1Spikein=`chromosomal_counter $suffChrSpikein $chrcAlign1`
+nAlignAR2Sample=`chromosomal_counter $suffChrSample $chrcAlign2`
+nAlignAR2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlign2`
 nA1Sample=`chromosomal_counter $suffChrSample $chrcRef`
 nA2Sample=`chromosomal_counter $suffChrSample $chrcAlt`
 nA1Spikein=`chromosomal_counter $suffChrSpikein $chrcRef`

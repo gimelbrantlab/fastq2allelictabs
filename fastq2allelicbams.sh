@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -p pool
 #SBATCH -c 8
-#SBATCH --mem-per-cpu=16G
+#SBATCH --mem-per-cpu=20G
 #SBATCH -o /home/amendelevich/logs/bulkSpike/Sep22/fastq2albam_%A_%a.out
 #SBATCH -e /home/amendelevich/logs/bulkSpike/Sep22/fastq2albam_%A_%a.err
 

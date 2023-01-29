@@ -9,4 +9,4 @@ For an example wrapper function for steps (1-3) see `fastq2allelicbams.sh`; for 
 
 ![pic](https://github.com/gimelbrantlab/fastq2allelictabs/blob/main/schemes/ase-preprocessing-outline.png)
 
-Note: step (1) is the same as in [ASEReadCounter*](https://github.com/gimelbrantlab/ASEReadCounter_star), when (2-4) have been evolved.
+Note: step (1) is the same as in [ASEReadCounter*](https://github.com/gimelbrantlab/ASEReadCounter_star) (see [Wiki](https://github.com/gimelbrantlab/ASEReadCounter_star/wiki/1.-Reference-preparation#preparing-files-for-using-as-reference)), when (2-4) have been evolved.

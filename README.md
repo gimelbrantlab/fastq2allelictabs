@@ -1,4 +1,4 @@
-# Preprocessing steps for alelle-specific expression on RNA-seq
+# Preprocessing protocol for alelle-specific expression on RNA-seq
 Includes:
 1. pseudoreference preparation: `pseudoreferences_creation/prepare_pseudoreference.py`
 2. alignment: `STAR`

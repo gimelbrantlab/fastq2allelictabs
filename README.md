@@ -5,3 +5,4 @@ Includes:
 * alelic reads resolving
 * counting reads per gene
 
+![pic](https://github.com/gimelbrantlab/fastq2allelictabs/blob/main/schemes/ase-preprocessing-outline.png)

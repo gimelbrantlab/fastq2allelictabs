@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH -c 4
 #SBATCH --mem-per-cpu=24G
-#SBATCH -o /home/amendelevich/logs/bulkSpike/Sep22/fastq2albam_%A_%a.out
-#SBATCH -e /home/amendelevich/logs/bulkSpike/Sep22/fastq2albam_%A_%a.err
+#SBATCH -o /home/amendelevich/logs/palladium/13apr23/fastq2albamS_%A_%a.out
+#SBATCH -e /home/amendelevich/logs/palladium/13apr23/fastq2albamS_%A_%a.err
 
 module load R/3.6.1
 

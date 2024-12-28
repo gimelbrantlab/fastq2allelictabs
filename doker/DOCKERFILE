@@ -1,0 +1,106 @@
+## Dockerfile author: Alexander A Gimelbrant
+
+# Base image
+FROM rocker/r-ver:4.3.1
+
+# Metadata
+LABEL description="Container with ControlFreq, Qllelic, and other bioinformatics tools pre-installed."
+
+# Update and install system dependencies
+RUN apt-get update && apt-get install -y \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libxml2-dev \
+    libgit2-dev \
+    git \
+    wget \
+    pkg-config \
+    build-essential \
+    python3-dev \
+    libffi-dev \
+    python3-pip \
+    libncurses5-dev \
+    libbz2-dev \
+    liblzma-dev \
+    openjdk-17-jdk \
+	pandoc \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install R packages
+RUN Rscript -e "install.packages(c('remotes', 'httr', 'usethis', 'roxygen2', 'testthat', 'jsonlite'), repos='https://cran.rstudio.com')" \
+    && Rscript -e "install.packages(c('rmarkdown', 'dplyr', 'readr' ), repos='https://cran.rstudio.com')" \
+    && Rscript -e "remotes::install_github('gimelbrantlab/Qllelic')" \
+    && Rscript -e "remotes::install_github('gimelbrantlab/controlFreq')"
+
+# Install Python libraries
+RUN pip3 install pandas pytz numpy
+
+# Clone and setup fastq2allelictabs
+RUN git clone https://github.com/gimelbrantlab/fastq2allelictabs /opt/fastq2allelictabs \
+    && chmod +x /opt/fastq2allelictabs/fastq_to_allelic_counts_tabs/*.py \
+    && chmod +x /opt/fastq2allelictabs/pseudoreferences_creation/*.py \
+    && ln -sf /opt/fastq2allelictabs/pseudoreferences_creation/prepare_pseudoreference.py /usr/local/bin/ \
+    && ln -sf /opt/fastq2allelictabs/fastq_to_allelic_counts_tabs/alleleseparation.py /usr/local/bin/
+
+# Install samtools
+RUN wget https://github.com/samtools/samtools/releases/download/1.21/samtools-1.21.tar.bz2 \
+    && tar -xvjf samtools-1.21.tar.bz2 \
+    && cd samtools-1.21 && ./configure --prefix=/usr/local && make && make install && cd .. \
+    && rm -rf samtools-1.21 samtools-1.21.tar.bz2
+
+# Install bcftools
+RUN wget https://github.com/samtools/bcftools/releases/download/1.21/bcftools-1.21.tar.bz2 \
+    && tar -xvjf bcftools-1.21.tar.bz2 \
+    && cd bcftools-1.21 && ./configure --prefix=/usr/local && make && make install && cd .. \
+    && rm -rf bcftools-1.21 bcftools-1.21.tar.bz2
+
+# Install htslib
+RUN wget https://github.com/samtools/htslib/releases/download/1.21/htslib-1.21.tar.bz2 \
+    && tar -xvjf htslib-1.21.tar.bz2 \
+    && cd htslib-1.21 && ./configure --prefix=/usr/local && make && make install && cd .. \
+    && rm -rf htslib-1.21 htslib-1.21.tar.bz2
+
+# Install vcftools
+RUN wget https://github.com/vcftools/vcftools/releases/download/v0.1.16/vcftools-0.1.16.tar.gz \
+    && tar -xvf vcftools-0.1.16.tar.gz \
+    && cd vcftools-0.1.16 && ./configure --prefix=/usr/local && make && make install && cd .. \
+    && rm -rf vcftools-0.1.16 vcftools-0.1.16.tar.gz
+
+# Setup Cufflinks
+RUN wget http://cole-trapnell-lab.github.io/cufflinks/assets/downloads/cufflinks-2.2.1.Linux_x86_64.tar.gz \
+    && tar -xvf cufflinks-2.2.1.Linux_x86_64.tar.gz \
+    && mv cufflinks-2.2.1.Linux_x86_64 /opt/cufflinks \
+    && ln -sf /opt/cufflinks/* /usr/local/bin/ \
+    && rm -rf cufflinks-2.2.1.Linux_x86_64.tar.gz
+
+# Install subread
+RUN wget https://sourceforge.net/projects/subread/files/subread-2.0.8/subread-2.0.8-Linux-x86_64.tar.gz \
+    && tar -xvf subread-2.0.8-Linux-x86_64.tar.gz \
+    && mv subread-2.0.8-Linux-x86_64 /opt/subread \
+    && ln -sf /opt/subread/bin/* /usr/local/bin/ \
+    && rm -rf subread-2.0.8-Linux-x86_64.tar.gz
+
+# Install GATK and STAR
+RUN wget https://github.com/broadinstitute/gatk/releases/download/4.6.1.0/gatk-4.6.1.0.zip \
+    && unzip gatk-4.6.1.0.zip \
+    && mv gatk-4.6.1.0 /opt \
+	&& ln -s /opt/gatk-4.6.1.0/gatk /usr/local/bin/gatk \
+    && rm gatk-4.6.1.0.zip
+
+RUN apt-get update && \
+    apt-get install -y python2.7 && \
+    ln -s /usr/bin/python2.7 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN wget https://github.com/alexdobin/STAR/archive/2.7.11b.tar.gz \
+    && tar -xzf 2.7.11b.tar.gz \
+    && cp STAR-2.7.11b/bin/Linux_x86_64_static/STAR /usr/local/bin/ \
+    && rm -rf STAR-2.7.11b.tar.gz
+
+# Set environment variables
+ENV PATH="/usr/local/bin:$PATH" \
+    JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+
+# Set the default command
+CMD ["echo", "Container ready! Use 'docker run' to interact."]

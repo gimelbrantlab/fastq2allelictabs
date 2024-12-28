@@ -1,19 +1,23 @@
 #!/bin/bash
-#SBATCH -c 4
-#SBATCH --mem-per-cpu=24G
-#SBATCH -o /home/amendelevich/logs/palladium/13apr23/fastq2albamS_%A_%a.out
-#SBATCH -e /home/amendelevich/logs/palladium/13apr23/fastq2albamS_%A_%a.err
 
-module load R/3.6.1
+# EXAMPLE:  
+#   bash $scripts_d/fastq2allelicbams_stats.sh $TAB 
+#   bash ~/my_dir/fastq2allelicbams_stats.sh /path/to/table_info.tsv 
 
-# Table to fill:
+# Tables (input and output):
 infoTab=$1
+infoTab_filled=${infoTab::-4}_info.tsv
 
+# Indices from the 1st column:
 indices=( $(cut -f1 $infoTab | tail -n +2) )
 
-for i in ${indices[*]}; do
+# New column names (only 1-15 are mandatory be present in the initial table):
+colnames=('##' sampleID platform readLenPE refSample refSpikeIn propSpikeIn chimericName refDirA1 refDirA2 fastq1Path fastq2Path outPath suffChrSample suffChrSpikein bamAlignAR1 bamAlignAR2 bamA1 bamA2 tabNChrom nFastq nAlignAR1 nAlignAR1Sample nAlignAR1Spikein pUMapAR1 pManyAR1 pMissAR1 pShortAR1 pOtherAR1 nAlignAR2 nAlignAR2Sample nAlignAR2Spikein pUMapAR2 pManyAR2 pMissAR2 pShortAR2 pOtherAR2 nA1 nA2 nNoA nA1Sample nA2Sample nA1Spikein nA2Spikein)
 
-infoVect=(`grep -w "^"$i $infoTab`)
+# ------ Run stats collection row by row ---------------------------------------------------------------------
+for i in ${indices[*]}; do # ---------------------------------------------------------------------------------
+
+infoVect=($(awk -v i=$i '{if ($1==i) {print}}' $infoTab))
 
 # 15 mandatory fields (0-14), so:
 sampleID=${infoVect[1]}
@@ -31,18 +35,15 @@ suffChrSpikein=${infoVect[14]}
 vcf=$(ls $refDir1/*vcf)
 alD=$d/alignments/$sampleID/
 
-
 # -- computing stats for alignments on A1 and A2 --
 # --
-# -- files --
+# -- files we need --
 
 alprefix=$alD/$sampleID".on_"$chimericName
 sampleprefix=$alD/$sampleID"_"$chimericName
 
 bamAlignAR1=$alprefix".on_Allele1.Aligned.sortedByCoord.out.bam"
-#fbamAR1=$alprefix".on_Allele1.Aligned.sortedByCoord.out.filtered_vW1.Nsort.bam"
 bamAlignAR2=$alprefix".on_Allele2.Aligned.sortedByCoord.out.bam"
-#fbamAR2=$alprefix".on_Allele2.Aligned.sortedByCoord.out.filtered_vW1.Nsort.bam"
 
 bamA1=$sampleprefix".Allele1.bam"
 bamA2=$sampleprefix".Allele2.bam"
@@ -59,7 +60,7 @@ chrcRef=$chr_counts".Allele1.tsv"
 chrcAlt=$chr_counts".Allele2.tsv"
 
 # -- taking out all stats --
-# -- STAR log -- 
+# ---- STAR log -- 
 
 nFastq=$(grep "Number of input reads" $star_log_AR1 | cut -f 2)
 
@@ -78,22 +79,33 @@ pShortAR2=$(grep "% of reads unmapped: too short" $star_log_AR2 | cut -f 2)
 pOtherAR2=$(grep "% of reads unmapped: other" $star_log_AR2 | cut -f 2)
 
 
-# -- merge log --
+# ---- merge log --
 asums=(`tail -n +5 $assign_log | head -n 15 | cut -f1 -d " "`)
 nA1=$(( ${asums[0]} + ${asums[2]} ))
 nA2=$(( ${asums[1]} + ${asums[3]} ))
 nNoA=${asums[4]}
 
-# -- chromosome counting --
+# ---- sample and spikein log --
 
+# ------ make the a1 and a2 merged table of chromosomes counts
 tabNChrom=$chr_counts".aligned_ref_alt.tsv"
 
 script="df=Reduce(function(x,y) merge(x,y, by=\"V2\", all=T), list(data.frame(read.delim(\""$chrcAlign1"\", header=F)), data.frame(read.delim(\""$chrcAlign2"\", header=F)), data.frame(read.delim(\""$chrcRef"\", header=F)), data.frame(read.delim(\""$chrcAlt"\", header=F)))); write.table(df, file=\""$tabNChrom"\", sep=\"\t\", row.names=FALSE, col.names=F, quote=FALSE)"
 R -e "$script"
 
+# ------ count sample and spike-in coverage separately
 function chromosomal_counter {
-    precount=$(grep $1"$" $2 | cut -f1 | paste -sd+ | bc)
+    if [[ "$1" == "None" ]]; then
+        echo 0 ; return  
+        # no spike-in chromosomes to align on them
+    elif [[ "$1" =i= "-" ]]; then
+        precount=$(cut -f1 $2 | awk '{sum += $1} END {print sum}')  
+        # only sample chrs in reference -> sum up everything
+    else
+        precount=$(grep $1"$" $2 | cut -f1 | awk '{sum += $1} END {print sum}')
+    fi
     [[ ! -z "$precount" ]] && echo $(($precount / 2)) || echo 0
+                                              # /2 because it's PE, and we're counting fragments
 }
 
 nAlignAR1Sample=`chromosomal_counter $suffChrSample $chrcAlign1`
@@ -105,6 +117,7 @@ nA2Sample=`chromosomal_counter $suffChrSample $chrcAlt`
 nA1Spikein=`chromosomal_counter $suffChrSpikein $chrcRef`
 nA2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlt`
 
+# -- writing down -----------
 # -- filling columns 16-44 --
 
 awk -v id=$sampleID -v d=$d \
@@ -127,7 +140,10 @@ awk -v id=$sampleID -v d=$d \
             $29=v29; $30=v30; $31=v31; $32=v32; $33=v33; $34=v34; $35=v35; 
             $36=v36; $37=v37; $38=v38; $39=v39; $40=v40; $41=v41; $42=v42;
             $43=v43; $44=v44 
-        }; print $0}' $infoTab > $d/tmp$id; \
-    mv $d/tmp$id $infoTab 
+        }; print $0}' $infoTab_filled > $d/tmp$id; \
+    
+    (echo "${colnames[*]}" | tr ' ' '\t'; tail -n +2 $d/tmp$id) > $infoTab_filled
 
-done
+    rm $d/tmp$id 
+
+done # ---------------------------------------------------------------------------------

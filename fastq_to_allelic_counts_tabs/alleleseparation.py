@@ -240,13 +240,13 @@ def main():
                     vA2 = parse_variants(a2_vA, a2_vG)
                     # can this read be assigned to some allele looking at SNPs?
                     # is the best candidate when looking at SNPs has better quality too?
-                    if (vA1[1] == 1 and (a1_score > a2_score or a1_score < a2_score and vA1[2]["c_this"] >= 3)):
+                    if (vA1[1] == 1 and (a1_score >= a2_score or a1_score <= a2_score and vA1[2]["c_this"] >= 3)):
                         if (vA1[0] == "only"):
                             a1_counts["clearSNPs"] += 1
                         else:
                             a1_counts["rest"] += 1
                         output_read(out_stream_1a, a1_read)
-                    elif (vA2[1] == 2 and (a1_score < a2_score or a1_score > a2_score and vA2[2]["c_this"] >= 3)):
+                    elif (vA2[1] == 2 and (a1_score <= a2_score or a1_score >= a2_score and vA2[2]["c_this"] >= 3)):
                         if (vA2[0] == "only"):
                             a2_counts["clearSNPs"] += 1
                         else:

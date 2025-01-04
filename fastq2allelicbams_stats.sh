@@ -98,7 +98,7 @@ function chromosomal_counter {
     if [[ "$1" == "None" ]]; then
         echo 0 ; return  
         # no spike-in chromosomes to align on them
-    elif [[ "$1" =i= "-" ]]; then
+    elif [[ "$1" == "-" ]]; then
         precount=$(cut -f1 $2 | awk '{sum += $1} END {print sum}')  
         # only sample chrs in reference -> sum up everything
     else

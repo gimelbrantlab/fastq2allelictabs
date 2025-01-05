@@ -28,7 +28,7 @@ while read line; do
     
     # select bams and fastas for a group:
     bams=($( awk -v os1=$org_sample -v os2=$org_spikein -v d=$ddir -v OFS='\t' '{if ($5==os1 && $6==os2 && $13==d) {print $18, $19}}' $infoTab ))
-    echo ${bams[*]} "\n"
+    echo ${bams[*]} ; echo
     refdirs=($( awk -v os1=$org_sample -v os2=$org_spikein -v d=$ddir -v OFS='\t' '{if ($5==os1 && $6==os2 && $13==d) {print $10}}' $infoTab ))
 
     # run featurecouns:

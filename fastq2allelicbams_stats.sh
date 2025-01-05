@@ -14,6 +14,9 @@ indices=( $(cut -f1 $infoTab | tail -n +2) )
 # New column names (only 1-15 are mandatory be present in the initial table):
 colnames=('##' sampleID platform readLenPE refSample refSpikeIn propSpikeIn chimericName refDirA1 refDirA2 fastq1Path fastq2Path outPath suffChrSample suffChrSpikein bamAlignAR1 bamAlignAR2 bamA1 bamA2 tabNChrom nFastq nAlignAR1 nAlignAR1Sample nAlignAR1Spikein pUMapAR1 pManyAR1 pMissAR1 pShortAR1 pOtherAR1 nAlignAR2 nAlignAR2Sample nAlignAR2Spikein pUMapAR2 pManyAR2 pMissAR2 pShortAR2 pOtherAR2 nA1 nA2 nNoA nA1Sample nA2Sample nA1Spikein nA2Spikein)
 
+echo "${colnames[*]}" | tr ' ' '\t' > $infoTab_filled
+tail -n +2 $infoTab >> $infoTab_filled
+
 # ------ Run stats collection row by row ---------------------------------------------------------------------
 for i in ${indices[*]}; do # ---------------------------------------------------------------------------------
 
@@ -118,8 +121,6 @@ nA1Spikein=`chromosomal_counter $suffChrSpikein $chrcRef`
 nA2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlt`
 
 # -- writing down -----------
-echo "${colnames[*]}" | tr ' ' '\t' > $infoTab_filled
-tail -n +2 $infoTab >> $infoTab_filled
 # -- filling columns 16-44 --
 awk -v id=$sampleID -v d=$d \
     -v v16=$bamAlignAR1 -v v17=$bamAlignAR2 \

@@ -118,8 +118,9 @@ nA1Spikein=`chromosomal_counter $suffChrSpikein $chrcRef`
 nA2Spikein=`chromosomal_counter $suffChrSpikein $chrcAlt`
 
 # -- writing down -----------
+echo "${colnames[*]}" | tr ' ' '\t' > $infoTab_filled
+tail -n +2 $infoTab >> $infoTab_filled
 # -- filling columns 16-44 --
-
 awk -v id=$sampleID -v d=$d \
     -v v16=$bamAlignAR1 -v v17=$bamAlignAR2 \
     -v v18=$bamA1 -v v19=$bamA2 \
@@ -140,10 +141,7 @@ awk -v id=$sampleID -v d=$d \
             $29=v29; $30=v30; $31=v31; $32=v32; $33=v33; $34=v34; $35=v35; 
             $36=v36; $37=v37; $38=v38; $39=v39; $40=v40; $41=v41; $42=v42;
             $43=v43; $44=v44 
-        }; print $0}' $infoTab_filled > $d/tmp$id; \
-    
-    (echo "${colnames[*]}" | tr ' ' '\t'; tail -n +2 $d/tmp$id) > $infoTab_filled
-
-    rm $d/tmp$id 
-
+        }; print $0}' $infoTab_filled > tmp${i}_${sampleID} 
+#
+mv $d/tmp${i}_${sampleID} $infoTab_filled    
 done # ---------------------------------------------------------------------------------

@@ -142,7 +142,7 @@ awk -v id=$sampleID -v d=$d \
             $29=v29; $30=v30; $31=v31; $32=v32; $33=v33; $34=v34; $35=v35; 
             $36=v36; $37=v37; $38=v38; $39=v39; $40=v40; $41=v41; $42=v42;
             $43=v43; $44=v44 
-        }; print $0}' $infoTab_filled > tmp${i}_${sampleID} 
+        }; print $0}' $infoTab_filled > $d/tmp${i}_${sampleID} 
 #
 mv $d/tmp${i}_${sampleID} $infoTab_filled    
 done # ---------------------------------------------------------------------------------

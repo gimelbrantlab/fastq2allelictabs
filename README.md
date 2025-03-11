@@ -6,7 +6,10 @@ Includes:
 4. counting reads per gene: `featureCounts`
 
 See also: [controlFreq](https://github.com/gimelbrantlab/controlFreq), R-package for calculating overdispersion in RNA-seq samples, in presence of technical replication or spike-ins.
+### Installation
+`docker pull sasha/ase`
 
+### Description
 For an example wrapper function for steps (1-3) see `fastq2allelicbams.sh`; for stats collection (like # of raw reads, # of aligned reads, spike-in reads proportion) see `fastq2allelicbams_stats.sh`; for step (4) see `allelicbams2genecounts.sh`. See `example` directory for sample butch table example, and Wiki page for more details and usecases, motivation of pipeline choice, and QC.
 
 ![pic](https://github.com/gimelbrantlab/fastq2allelictabs/blob/main/schemes/ase-preprocessing-outline.png)
